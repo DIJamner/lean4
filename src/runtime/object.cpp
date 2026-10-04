@@ -1711,15 +1711,16 @@ static object * mpz_to_int(mpz && m) {
 
 extern "C" LEAN_EXPORT lean_obj_res lean_big_int_to_nat(lean_obj_arg a) {
     lean_assert(!lean_is_scalar(a));
-    if (lean_is_exclusive(a)) {
-        // `a` is about to be freed, so steal its value instead of copying it.
-        mpz m(std::move(to_mpz(a)->m_value));
+    mpz const & m = mpz_value(a);
+    lean_assert(!m.is_neg());
+    if (m.is_size_t() && m.get_size_t() <= LEAN_MAX_SMALL_NAT) {
+        obj_res r = lean_box(m.get_size_t());
         lean_dec(a);
-        return mpz_to_nat(std::move(m));
+        return r;
     }
-    mpz m = mpz_value(a);
-    lean_dec(a);
-    return mpz_to_nat(std::move(m));
+    // Big `Int` and big `Nat` objects have the same representation, so the
+    // (owned) argument is also a valid `Nat` object.
+    return a;
 }
 
 extern "C" LEAN_EXPORT object * lean_cstr_to_int(char const * n) {
