@@ -758,8 +758,13 @@ mpz & mpz::operator+=(unsigned u) {
 }
 
 mpz & mpz::operator+=(int u) {
-    unsigned u1 = u < 0 ? -static_cast<unsigned>(u) : static_cast<unsigned>(u);
-    set_add(m_sign, m_size, m_digits, u < 0, 1, &u1);
+    if (u < 0) {
+        unsigned u1 = -static_cast<unsigned>(u);
+        set_add(m_sign, m_size, m_digits, true, 1, &u1);
+    } else {
+        unsigned u1 = u;
+        set_add(m_sign, m_size, m_digits, false, 1, &u1);
+    }
     return *this;
 }
 
@@ -774,8 +779,13 @@ mpz & mpz::operator-=(unsigned u) {
 }
 
 mpz & mpz::operator-=(int u) {
-    unsigned u1 = u < 0 ? -static_cast<unsigned>(u) : static_cast<unsigned>(u);
-    set_add(m_sign, m_size, m_digits, u >= 0, 1, &u1);
+    if (u < 0) {
+        unsigned u1 = -static_cast<unsigned>(u);
+        set_add(m_sign, m_size, m_digits, false, 1, &u1);
+    } else {
+        unsigned u1 = u;
+        set_add(m_sign, m_size, m_digits, true, 1, &u1);
+    }
     return *this;
 }
 
@@ -790,8 +800,13 @@ mpz & mpz::operator*=(unsigned u) {
 }
 
 mpz & mpz::operator*=(int u) {
-    unsigned u1 = u < 0 ? -static_cast<unsigned>(u) : static_cast<unsigned>(u);
-    set_mul(m_sign, m_size, m_digits, u < 0, 1, &u1);
+    if (u < 0) {
+        unsigned u1 = -static_cast<unsigned>(u);
+        set_mul(m_sign, m_size, m_digits, true, 1, &u1);
+    } else {
+        unsigned u1 = u;
+        set_mul(m_sign, m_size, m_digits, false, 1, &u1);
+    }
     return *this;
 }
 

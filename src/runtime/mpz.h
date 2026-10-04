@@ -217,45 +217,40 @@ public:
     /** \brief Modular exponentiation: returns `this^exp mod m`. Requires `m != 0`. */
     mpz powm(mpz const & exp, mpz const & m) const;
 
-    /*
-      The binary operators below compute their result directly into a fresh
-      `mpz`, which is returned by NRVO. Neither operand is copied: taking the
-      left operand by value and returning `a op= b` (an lvalue) would copy the
-      operand on entry and copy the result again on return.
-    */
-    friend mpz operator+(mpz const & a, mpz const & b);
-    friend mpz operator+(mpz const & a, unsigned b);
-    friend mpz operator+(mpz const & a, int b);
+    // The binary operators compute into a fresh result; operands are not copied.
+    LEAN_EXPORT friend mpz operator+(mpz const & a, mpz const & b);
+    LEAN_EXPORT friend mpz operator+(mpz const & a, unsigned b);
+    LEAN_EXPORT friend mpz operator+(mpz const & a, int b);
     friend mpz operator+(mpz const & a, uint64 b) { return b > std::numeric_limits<unsigned>::max() ? a + mpz(b) : a + static_cast<unsigned>(b); }
     friend mpz operator+(unsigned a, mpz const & b) { return b + a; }
     friend mpz operator+(uint64 a, mpz const & b) { return b + a; }
     friend mpz operator+(int a, mpz const & b) { return b + a; }
 
-    friend mpz operator-(mpz const & a, mpz const & b);
-    friend mpz operator-(mpz const & a, unsigned b);
-    friend mpz operator-(mpz const & a, int b);
+    LEAN_EXPORT friend mpz operator-(mpz const & a, mpz const & b);
+    LEAN_EXPORT friend mpz operator-(mpz const & a, unsigned b);
+    LEAN_EXPORT friend mpz operator-(mpz const & a, int b);
     friend mpz operator-(mpz const & a, uint64 b) { return b > std::numeric_limits<unsigned>::max() ? a - mpz(b) : a - static_cast<unsigned>(b); }
     friend mpz operator-(unsigned a, mpz const & b) { mpz r = b - a; r.neg(); return r; }
     friend mpz operator-(uint64 a, mpz const & b) { mpz r = b - a; r.neg(); return r; }
     friend mpz operator-(int a, mpz const & b) { mpz r = b - a; r.neg(); return r; }
 
-    friend mpz operator*(mpz const & a, mpz const & b);
-    friend mpz operator*(mpz const & a, unsigned b);
-    friend mpz operator*(mpz const & a, int b);
+    LEAN_EXPORT friend mpz operator*(mpz const & a, mpz const & b);
+    LEAN_EXPORT friend mpz operator*(mpz const & a, unsigned b);
+    LEAN_EXPORT friend mpz operator*(mpz const & a, int b);
     friend mpz operator*(mpz const & a, uint64 b) { return b > std::numeric_limits<unsigned>::max() ? a * mpz(b) : a * static_cast<unsigned>(b); }
     friend mpz operator*(unsigned a, mpz const & b) { return b * a; }
     friend mpz operator*(uint64 a, mpz const & b) { return b * a; }
     friend mpz operator*(int a, mpz const & b) { return b * a; }
 
-    friend mpz operator/(mpz const & a, mpz const & b);
-    friend mpz operator/(mpz const & a, unsigned b);
+    LEAN_EXPORT friend mpz operator/(mpz const & a, mpz const & b);
+    LEAN_EXPORT friend mpz operator/(mpz const & a, unsigned b);
     friend mpz operator/(mpz const & a, uint64 b) { return b > std::numeric_limits<unsigned>::max() ? a / mpz(b) : a / static_cast<unsigned>(b); }
     friend mpz operator/(mpz const & a, int b) { return a / mpz(b); }
     friend mpz operator/(unsigned a, mpz const & b) { return mpz(a) / b; }
     friend mpz operator/(uint64 a, mpz const & b) { return mpz(a) / b; }
     friend mpz operator/(int a, mpz const & b) { return mpz(a) / b; }
 
-    friend mpz operator%(mpz const & a, mpz const & b);
+    LEAN_EXPORT friend mpz operator%(mpz const & a, mpz const & b);
 
     static mpz divexact(mpz const & n, mpz const & d);
 
@@ -271,9 +266,9 @@ public:
     mpz & operator|=(mpz const & o);
     mpz & operator^=(mpz const & o);
 
-    friend mpz operator&(mpz const & a, mpz const & b);
-    friend mpz operator|(mpz const & a, mpz const & b);
-    friend mpz operator^(mpz const & a, mpz const & b);
+    LEAN_EXPORT friend mpz operator&(mpz const & a, mpz const & b);
+    LEAN_EXPORT friend mpz operator|(mpz const & a, mpz const & b);
+    LEAN_EXPORT friend mpz operator^(mpz const & a, mpz const & b);
 
     // a <- b * 2^k
     friend void mul2k(mpz & a, mpz const & b, unsigned k);
