@@ -48,7 +48,7 @@ def main : IO Unit := do
   check "int small" ((x + 3) - x == 3 && (y - 3) - y == -3)
   check "int boundary" (((2 : Int) ^ 31 - 1) + 1 == 2 ^ 31 && -((2 : Int) ^ 31) - 1 + 1 == -(2 ^ 31))
   check "int toNat" (x.toNat == a && y.toNat == 0 && (x - x + 5).toNat == 5)
-  check "int toNat fresh" ((x * 2).toNat == 2 * a)
+  check "int toNat natAbs big" ((x * 2).toNat == 2 * a && (-(x * 2)).natAbs == 2 * a && y.natAbs == b)
   check "int operands unchanged" (x == (a : Int) && y == -(b : Int))
   IO.println s!"{a % 1000000007} {(a * b) % 1000000007} {(a ^^^ b) >>> 100} {(x * y) / (pow2 300 : Int)}"
   IO.println "done"
