@@ -1064,8 +1064,7 @@ int64 mpz::smod64() const {
 }
 
 void power(mpz & a, mpz const & b, unsigned k) {
-    a = b;
-    a.pow(k);
+    a = b.pow(k);
 }
 
 void gcd(mpz & g, mpz const & a, mpz const & b) {
