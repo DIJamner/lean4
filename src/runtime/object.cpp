@@ -1354,18 +1354,22 @@ void deactivate_promise(lean_promise_object * promise) {
 // =======================================
 // Natural numbers
 
-object * alloc_mpz(mpz const & m) {
+object * alloc_mpz(mpz && m) {
     void * mem = lean_alloc_small_object(sizeof(mpz_object));
 #ifdef LEAN_MIMALLOC
     // placement new is not guaranteed to preserve this field so store and restore it
     unsigned sz = ((lean_object *)mem)->m_cs_sz;
 #endif
-    mpz_object * o = new (mem) mpz_object(m);
+    mpz_object * o = new (mem) mpz_object(std::move(m));
 #ifdef LEAN_MIMALLOC
     o->m_header.m_cs_sz = sz;
 #endif
     lean_set_st_header((lean_object*)o, LeanMPZ, 0);
     return (lean_object*)o;
+}
+
+object * alloc_mpz(mpz const & m) {
+    return alloc_mpz(mpz(m));
 }
 
 #ifdef LEAN_USE_GMP
@@ -1378,16 +1382,33 @@ extern "C" LEAN_EXPORT void lean_extract_mpz_value(lean_object * o, mpz_t v) {
 }
 #endif
 
-object * mpz_to_nat_core(mpz const & m) {
+object * mpz_to_nat_core(mpz && m) {
     lean_assert(!m.is_size_t() || m.get_size_t() > LEAN_MAX_SMALL_NAT);
-    return alloc_mpz(m);
+    return alloc_mpz(std::move(m));
 }
 
-static inline obj_res mpz_to_nat(mpz const & m) {
+object * mpz_to_nat_core(mpz const & m) {
+    return mpz_to_nat_core(mpz(m));
+}
+
+/* Note: the arithmetic functions below pass freshly computed `mpz` temporaries
+   to `mpz_to_nat`/`mpz_to_int`, which move them into the new object, so the
+   limbs of the result are never copied. */
+static inline obj_res mpz_to_nat(mpz && m) {
     if (m.is_size_t() && m.get_size_t() <= LEAN_MAX_SMALL_NAT)
         return lean_box(m.get_size_t());
     else
-        return mpz_to_nat_core(m);
+        return mpz_to_nat_core(std::move(m));
+}
+
+/* Returns the value of the `Nat` `a` as an `mpz`, without copying it if `a` is
+   a big number. If `a` is a scalar, `tmp` is used as storage. */
+static inline mpz const & nat_mpz_value(b_obj_arg a, mpz & tmp) {
+    if (lean_is_scalar(a)) {
+        tmp = mpz::of_size_t(lean_unbox(a));
+        return tmp;
+    }
+    return mpz_value(a);
 }
 
 extern "C" LEAN_EXPORT object * lean_cstr_to_nat(char const * n) {
@@ -1575,24 +1596,22 @@ extern "C" LEAN_EXPORT lean_obj_res lean_nat_shiftl(b_lean_obj_arg a1, b_lean_ob
     if (lean_is_scalar(a1) && lean_unbox(a1) == 0) {
         return lean_box(0);
     }
-    auto a = lean_is_scalar(a1)
-           ? mpz::of_size_t(lean_unbox(a1))
-           : mpz_value(a1);
     if (!lean_is_scalar(a2) || lean_unbox(a2) > UINT_MAX) {
         lean_internal_panic("Nat.shiftl exponent is too big");
     }
+    mpz tmp;
+    mpz const & a = nat_mpz_value(a1, tmp);
     mpz r;
     mul2k(r, a, lean_unbox(a2));
-    return mpz_to_nat(r);
+    return mpz_to_nat(std::move(r));
 }
 
 extern "C" LEAN_EXPORT lean_obj_res lean_nat_big_shiftr(b_lean_obj_arg a1, b_lean_obj_arg a2) {
     if (!lean_is_scalar(a2)) {
         return lean_box(0); // This large of an exponent must be 0.
     }
-    auto a = lean_is_scalar(a1)
-           ? mpz::of_size_t(lean_unbox(a1))
-           : mpz_value(a1);
+    mpz tmp;
+    mpz const & a = nat_mpz_value(a1, tmp);
     size_t s = lean_unbox(a2);
     // If the shift amount is large, then we fail if it is not large
     // enough to zero out all the bits.
@@ -1605,7 +1624,7 @@ extern "C" LEAN_EXPORT lean_obj_res lean_nat_big_shiftr(b_lean_obj_arg a1, b_lea
     }
     mpz r;
     div2k(r, a, s);
-    return mpz_to_nat(r);
+    return mpz_to_nat(std::move(r));
 }
 
 extern "C" LEAN_EXPORT lean_obj_res lean_nat_pow(b_lean_obj_arg a1, b_lean_obj_arg a2) {
@@ -1634,9 +1653,10 @@ extern "C" LEAN_EXPORT lean_obj_res lean_nat_powmod(b_lean_obj_arg b, b_lean_obj
         // computation.
         return lean_nat_pow(b, e);
     }
-    mpz mb = lean_is_scalar(b) ? mpz::of_size_t(lean_unbox(b)) : mpz_value(b);
-    mpz me = lean_is_scalar(e) ? mpz::of_size_t(lean_unbox(e)) : mpz_value(e);
-    mpz mm = lean_is_scalar(m) ? mpz::of_size_t(lean_unbox(m)) : mpz_value(m);
+    mpz tb, te, tm;
+    mpz const & mb = nat_mpz_value(b, tb);
+    mpz const & me = nat_mpz_value(e, te);
+    mpz const & mm = nat_mpz_value(m, tm);
     return mpz_to_nat(mb.powm(me, mm));
 }
 
@@ -1677,23 +1697,29 @@ extern "C" LEAN_EXPORT size_t lean_nat_size_in_bytes(b_lean_obj_arg a) {
 // =======================================
 // Integers
 
-inline object * mpz_to_int_core(mpz const & m) {
+inline object * mpz_to_int_core(mpz && m) {
     lean_assert(m < LEAN_MIN_SMALL_INT || m > LEAN_MAX_SMALL_INT);
-    return alloc_mpz(m);
+    return alloc_mpz(std::move(m));
 }
 
-static object * mpz_to_int(mpz const & m) {
+static object * mpz_to_int(mpz && m) {
     if (m < LEAN_MIN_SMALL_INT || m > LEAN_MAX_SMALL_INT)
-        return mpz_to_int_core(m);
+        return mpz_to_int_core(std::move(m));
     else
         return lean_box(static_cast<unsigned>(m.get_int()));
 }
 
 extern "C" LEAN_EXPORT lean_obj_res lean_big_int_to_nat(lean_obj_arg a) {
     lean_assert(!lean_is_scalar(a));
+    if (lean_is_exclusive(a)) {
+        // `a` is about to be freed, so steal its value instead of copying it.
+        mpz m(std::move(to_mpz(a)->m_value));
+        lean_dec(a);
+        return mpz_to_nat(std::move(m));
+    }
     mpz m = mpz_value(a);
     lean_dec(a);
-    return mpz_to_nat(m);
+    return mpz_to_nat(std::move(m));
 }
 
 extern "C" LEAN_EXPORT object * lean_cstr_to_int(char const * n) {

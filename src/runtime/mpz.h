@@ -40,10 +40,14 @@ class LEAN_EXPORT mpz {
     void init_int64(int64 v);
     void init_mpz(mpz const & v);
     void set(size_t sz, mpn_digit const * digits);
-    mpz & add(bool sign, size_t sz, mpn_digit const * digits);
-    mpz & mul(bool sign, size_t sz, mpn_digit const * digits);
-    mpz & div(bool sign, size_t sz, mpn_digit const * digits);
-    mpz & rem(size_t sz, mpn_digit const * digits);
+    // The following helpers set `*this` to the result of an operation on the
+    // operands `(sign1, sz1, d1)` and `(sign2, sz2, d2)`. The result is computed
+    // into a temporary buffer first, so the operands may alias `*this`.
+    void set_add(bool sign1, size_t sz1, mpn_digit const * d1, bool sign2, size_t sz2, mpn_digit const * d2);
+    void set_mul(bool sign1, size_t sz1, mpn_digit const * d1, bool sign2, size_t sz2, mpn_digit const * d2);
+    void set_div(bool sign1, size_t sz1, mpn_digit const * d1, bool sign2, size_t sz2, mpn_digit const * d2);
+    void set_rem(bool sign1, size_t sz1, mpn_digit const * d1, size_t sz2, mpn_digit const * d2);
+    template<typename F> void set_bitwise(mpz const & a, mpz const & b, F f);
 #endif
 public:
     mpz();
@@ -207,45 +211,51 @@ public:
     mpz & operator/=(int u) { return operator/=(mpz(u)); } // TODO(Leo): improve
 
     mpz & operator%=(mpz const & o);
-    friend mpz rem(mpz const & a, mpz const & b) { mpz r(a); return r %= b; }
+    friend mpz rem(mpz const & a, mpz const & b) { return a % b; }
 
     mpz pow(unsigned int exp) const;
     /** \brief Modular exponentiation: returns `this^exp mod m`. Requires `m != 0`. */
     mpz powm(mpz const & exp, mpz const & m) const;
 
-    friend mpz operator+(mpz a, mpz const & b) { return a += b; }
-    friend mpz operator+(mpz a, unsigned b)  { return a += b; }
-    friend mpz operator+(mpz a, uint64 b)  { return a += b; }
-    friend mpz operator+(mpz a, int b)  { return a += b; }
-    friend mpz operator+(unsigned a, mpz b) { return b += a; }
-    friend mpz operator+(uint64 a, mpz b) { return b += a; }
-    friend mpz operator+(int a, mpz b) { return b += a; }
+    /*
+      The binary operators below compute their result directly into a fresh
+      `mpz`, which is returned by NRVO. Neither operand is copied: taking the
+      left operand by value and returning `a op= b` (an lvalue) would copy the
+      operand on entry and copy the result again on return.
+    */
+    friend mpz operator+(mpz const & a, mpz const & b);
+    friend mpz operator+(mpz const & a, unsigned b);
+    friend mpz operator+(mpz const & a, int b);
+    friend mpz operator+(mpz const & a, uint64 b) { return b > std::numeric_limits<unsigned>::max() ? a + mpz(b) : a + static_cast<unsigned>(b); }
+    friend mpz operator+(unsigned a, mpz const & b) { return b + a; }
+    friend mpz operator+(uint64 a, mpz const & b) { return b + a; }
+    friend mpz operator+(int a, mpz const & b) { return b + a; }
 
-    friend mpz operator-(mpz a, mpz const & b) { return a -= b; }
-    friend mpz operator-(mpz a, unsigned b) { return a -= b; }
-    friend mpz operator-(mpz a, uint64 b) { return a -= b; }
-    friend mpz operator-(mpz a, int b) { return a -= b; }
-    friend mpz operator-(unsigned a, mpz b) { b.neg(); return b += a; }
-    friend mpz operator-(uint64 a, mpz b) { b.neg(); return b += a; }
-    friend mpz operator-(int a, mpz b) { b.neg(); return b += a; }
+    friend mpz operator-(mpz const & a, mpz const & b);
+    friend mpz operator-(mpz const & a, unsigned b);
+    friend mpz operator-(mpz const & a, int b);
+    friend mpz operator-(mpz const & a, uint64 b) { return b > std::numeric_limits<unsigned>::max() ? a - mpz(b) : a - static_cast<unsigned>(b); }
+    friend mpz operator-(unsigned a, mpz const & b) { mpz r = b - a; r.neg(); return r; }
+    friend mpz operator-(uint64 a, mpz const & b) { mpz r = b - a; r.neg(); return r; }
+    friend mpz operator-(int a, mpz const & b) { mpz r = b - a; r.neg(); return r; }
 
-    friend mpz operator*(mpz a, mpz const & b) { return a *= b; }
-    friend mpz operator*(mpz a, unsigned b) { return a *= b; }
-    friend mpz operator*(mpz a, uint64 b) { return a *= b; }
-    friend mpz operator*(mpz a, int b) { return a *= b; }
-    friend mpz operator*(unsigned a, mpz b) { return b *= a; }
-    friend mpz operator*(uint64 a, mpz b) { return b *= a; }
-    friend mpz operator*(int a, mpz b) { return b *= a; }
+    friend mpz operator*(mpz const & a, mpz const & b);
+    friend mpz operator*(mpz const & a, unsigned b);
+    friend mpz operator*(mpz const & a, int b);
+    friend mpz operator*(mpz const & a, uint64 b) { return b > std::numeric_limits<unsigned>::max() ? a * mpz(b) : a * static_cast<unsigned>(b); }
+    friend mpz operator*(unsigned a, mpz const & b) { return b * a; }
+    friend mpz operator*(uint64 a, mpz const & b) { return b * a; }
+    friend mpz operator*(int a, mpz const & b) { return b * a; }
 
-    friend mpz operator/(mpz a, mpz const & b) { return a /= b; }
-    friend mpz operator/(mpz a, unsigned b) { return a /= b; }
-    friend mpz operator/(mpz a, uint64 b) { return a /= b; }
-    friend mpz operator/(mpz a, int b) { return a /= b; }
-    friend mpz operator/(unsigned a, mpz const & b) { mpz r(a); return r /= b; }
-    friend mpz operator/(uint64 a, mpz const & b) { mpz r(a); return r /= b; }
-    friend mpz operator/(int a, mpz const & b) { mpz r(a); return r /= b; }
+    friend mpz operator/(mpz const & a, mpz const & b);
+    friend mpz operator/(mpz const & a, unsigned b);
+    friend mpz operator/(mpz const & a, uint64 b) { return b > std::numeric_limits<unsigned>::max() ? a / mpz(b) : a / static_cast<unsigned>(b); }
+    friend mpz operator/(mpz const & a, int b) { return a / mpz(b); }
+    friend mpz operator/(unsigned a, mpz const & b) { return mpz(a) / b; }
+    friend mpz operator/(uint64 a, mpz const & b) { return mpz(a) / b; }
+    friend mpz operator/(int a, mpz const & b) { return mpz(a) / b; }
 
-    friend mpz operator%(mpz a, mpz const & b) { return a %= b; }
+    friend mpz operator%(mpz const & a, mpz const & b);
 
     static mpz divexact(mpz const & n, mpz const & d);
 
@@ -261,9 +271,9 @@ public:
     mpz & operator|=(mpz const & o);
     mpz & operator^=(mpz const & o);
 
-    friend mpz operator&(mpz a, mpz const & b) { return a &= b; }
-    friend mpz operator|(mpz a, mpz const & b) { return a |= b; }
-    friend mpz operator^(mpz a, mpz const & b) { return a ^= b; }
+    friend mpz operator&(mpz const & a, mpz const & b);
+    friend mpz operator|(mpz const & a, mpz const & b);
+    friend mpz operator^(mpz const & a, mpz const & b);
 
     // a <- b * 2^k
     friend void mul2k(mpz & a, mpz const & b, unsigned k);

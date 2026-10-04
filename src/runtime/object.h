@@ -23,6 +23,7 @@ struct mpz_object {
     mpz         m_value;
     mpz_object() {}
     explicit mpz_object(mpz const & m):m_value(m) {}
+    explicit mpz_object(mpz && m):m_value(std::move(m)) {}
 };
 
 typedef lean_external_class         external_object_class;
@@ -175,6 +176,7 @@ inline object* apply_m(object* f, unsigned n, object** args) { return lean_apply
 // MPZ
 
 LEAN_EXPORT object * alloc_mpz(mpz const &);
+LEAN_EXPORT object * alloc_mpz(mpz &&);
 inline mpz_object * to_mpz(object * o) { lean_assert(is_mpz(o)); return (mpz_object*)o; }
 
 // =======================================
@@ -316,6 +318,7 @@ inline obj_res mk_except_err(obj_arg v) { obj_res r = alloc_cnstr(0, 1, 0); cnst
 
 inline mpz const & mpz_value(b_obj_arg o) { return to_mpz(o)->m_value; }
 LEAN_EXPORT object * mpz_to_nat_core(mpz const & m);
+LEAN_EXPORT object * mpz_to_nat_core(mpz && m);
 inline object * mk_nat_obj_core(mpz const & m) { return mpz_to_nat_core(m); }
 inline obj_res mk_nat_obj(mpz const & m) {
     if (m.is_size_t() && m.get_size_t() <= LEAN_MAX_SMALL_NAT)

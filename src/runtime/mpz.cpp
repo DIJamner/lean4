@@ -160,6 +160,32 @@ mpz & mpz::operator*=(unsigned u) { mpz_mul_ui(m_val, m_val, u); return *this; }
 
 mpz & mpz::operator*=(int u) { mpz_mul_si(m_val, m_val, u); return *this; }
 
+mpz operator+(mpz const & a, mpz const & b) { mpz r; mpz_add(r.m_val, a.m_val, b.m_val); return r; }
+
+mpz operator+(mpz const & a, unsigned b) { mpz r; mpz_add_ui(r.m_val, a.m_val, b); return r; }
+
+mpz operator+(mpz const & a, int b) {
+    mpz r;
+    if (b >= 0) mpz_add_ui(r.m_val, a.m_val, b); else mpz_sub_ui(r.m_val, a.m_val, -static_cast<unsigned>(b));
+    return r;
+}
+
+mpz operator-(mpz const & a, mpz const & b) { mpz r; mpz_sub(r.m_val, a.m_val, b.m_val); return r; }
+
+mpz operator-(mpz const & a, unsigned b) { mpz r; mpz_sub_ui(r.m_val, a.m_val, b); return r; }
+
+mpz operator-(mpz const & a, int b) {
+    mpz r;
+    if (b >= 0) mpz_sub_ui(r.m_val, a.m_val, b); else mpz_add_ui(r.m_val, a.m_val, -static_cast<unsigned>(b));
+    return r;
+}
+
+mpz operator*(mpz const & a, mpz const & b) { mpz r; mpz_mul(r.m_val, a.m_val, b.m_val); return r; }
+
+mpz operator*(mpz const & a, unsigned b) { mpz r; mpz_mul_ui(r.m_val, a.m_val, b); return r; }
+
+mpz operator*(mpz const & a, int b) { mpz r; mpz_mul_si(r.m_val, a.m_val, b); return r; }
+
 mpz mpz::divexact(mpz const & n, mpz const & d) {
     mpz q;
     mpz_divexact(q.m_val, n.m_val, d.m_val);
@@ -208,6 +234,12 @@ mpz & mpz::operator/=(unsigned u) { mpz_tdiv_q_ui(m_val, m_val, u); return *this
 
 mpz & mpz::operator%=(mpz const & o) { mpz_tdiv_r(m_val, m_val, o.m_val); return *this; }
 
+mpz operator/(mpz const & a, mpz const & b) { mpz r; mpz_tdiv_q(r.m_val, a.m_val, b.m_val); return r; }
+
+mpz operator/(mpz const & a, unsigned b) { mpz r; mpz_tdiv_q_ui(r.m_val, a.m_val, b); return r; }
+
+mpz operator%(mpz const & a, mpz const & b) { mpz r; mpz_tdiv_r(r.m_val, a.m_val, b.m_val); return r; }
+
 mpz mpz::pow(unsigned int exp) const {
     mpz r;
     mpz_pow_ui(r.m_val, m_val, exp);
@@ -247,6 +279,12 @@ mpz & mpz::operator^=(mpz const & o) {
     mpz_xor(m_val, m_val, o.m_val);
     return *this;
 }
+
+mpz operator&(mpz const & a, mpz const & b) { mpz r; mpz_and(r.m_val, a.m_val, b.m_val); return r; }
+
+mpz operator|(mpz const & a, mpz const & b) { mpz r; mpz_ior(r.m_val, a.m_val, b.m_val); return r; }
+
+mpz operator^(mpz const & a, mpz const & b) { mpz r; mpz_xor(r.m_val, a.m_val, b.m_val); return r; }
 
 void mul2k(mpz & a, mpz const & b, unsigned k) {
     mpz_mul_2exp(a.m_val, b.m_val, k);
@@ -608,60 +646,59 @@ void mpz::set(size_t sz, mpn_digit const * digits) {
 
 typedef buffer<mpn_digit, 256> digit_buffer;
 
-mpz & mpz::add(bool sign, size_t sz, mpn_digit const * digits) {
+void mpz::set_add(bool sign1, size_t sz1, mpn_digit const * d1, bool sign2, size_t sz2, mpn_digit const * d2) {
     digit_buffer tmp;
-    if (m_sign == sign) {
-        size_t new_sz = std::max(m_size, sz)+1;
+    if (sign1 == sign2) {
+        size_t new_sz = std::max(sz1, sz2)+1;
         size_t real_sz;
         tmp.ensure_capacity(new_sz);
-        mpn_add(m_digits, m_size,
-                digits, sz,
+        mpn_add(d1, sz1,
+                d2, sz2,
                 tmp.begin(), new_sz, &real_sz);
         lean_assert(real_sz <= new_sz);
         set(real_sz, tmp.begin());
+        m_sign = sign1;
     } else {
         mpn_digit borrow;
-        int r = mpn_compare(m_digits, m_size,
-                            digits, sz);
+        int r = mpn_compare(d1, sz1,
+                            d2, sz2);
         if (r == 0) {
             operator=(0);
-            return *this;
         } else if (r < 0) {
-            size_t new_sz = sz;
+            size_t new_sz = sz2;
             tmp.ensure_capacity(new_sz);
-            mpn_sub(digits, sz,
-                    m_digits, m_size,
+            mpn_sub(d2, sz2,
+                    d1, sz1,
                     tmp.begin(), &borrow);
             lean_assert(borrow==0);
-            m_sign = sign;
             set(new_sz, tmp.begin());
+            m_sign = sign2;
         } else {
             // r > 0
-            size_t new_sz = m_size;
+            size_t new_sz = sz1;
             tmp.ensure_capacity(new_sz);
-            mpn_sub(m_digits, m_size,
-                    digits, sz,
+            mpn_sub(d1, sz1,
+                    d2, sz2,
                     tmp.begin(), &borrow);
             lean_assert(borrow == 0);
             set(new_sz, tmp.begin());
+            m_sign = sign1;
         }
     }
-    return *this;
 }
 
-mpz & mpz::mul(bool sign, size_t sz, mpn_digit const * digits) {
+void mpz::set_mul(bool sign1, size_t sz1, mpn_digit const * d1, bool sign2, size_t sz2, mpn_digit const * d2) {
     digit_buffer tmp;
-    size_t new_sz = m_size + sz;
+    size_t new_sz = sz1 + sz2;
     tmp.ensure_capacity(new_sz);
-    mpn_mul(m_digits, m_size,
-            digits, sz,
+    mpn_mul(d1, sz1,
+            d2, sz2,
             tmp.begin());
     set(new_sz, tmp.begin());
-    m_sign = !is_zero() && m_sign != sign;
-    return *this;
+    m_sign = !is_zero() && sign1 != sign2;
 }
 
-mpz & mpz::div(bool sign, size_t sz, mpn_digit const * digits) {
+void mpz::set_div(bool sign1, size_t sz1, mpn_digit const * d1, bool sign2, size_t sz2, mpn_digit const * d2) {
     /*
       +26 / +7 = +3, remainder is +5
       -26 / +7 = -3, remainder is -5
@@ -669,109 +706,183 @@ mpz & mpz::div(bool sign, size_t sz, mpn_digit const * digits) {
       -26 / -7 = +3, remainder is -5
     */
     digit_buffer q1, r1;
-    if (sz > m_size) {
+    if (sz2 > sz1) {
         operator=(0);
-        return *this;
+        return;
     }
-    size_t q_sz = m_size - sz + 1;
-    size_t r_sz = sz;
+    size_t q_sz = sz1 - sz2 + 1;
+    size_t r_sz = sz2;
     q1.ensure_capacity(q_sz);
     r1.ensure_capacity(r_sz);
-    mpn_div(m_digits, m_size,
-            digits, sz,
+    mpn_div(d1, sz1,
+            d2, sz2,
             q1.begin(), r1.begin());
     set(q_sz, q1.begin());
-    m_sign = !is_zero() && m_sign != sign;
-    return *this;
+    m_sign = !is_zero() && sign1 != sign2;
 }
 
-mpz & mpz::rem(size_t sz, mpn_digit const * digits) {
+void mpz::set_rem(bool sign1, size_t sz1, mpn_digit const * d1, size_t sz2, mpn_digit const * d2) {
     /*
       +26 / +7 = +3, remainder is +5
       -26 / +7 = -3, remainder is -5
       +26 / -7 = -3, remainder is +5
       -26 / -7 = +3, remainder is -5
     */
-    digit_buffer q1, r1;
-    if (sz > m_size) {
-        return *this;
+    if (sz2 > sz1) {
+        // |d1| < |d2|, so the remainder is the first operand itself.
+        if (d1 != m_digits)
+            set(sz1, d1);
+        m_sign = sign1;
+        return;
     }
-    size_t q_sz = m_size - sz + 1;
-    size_t r_sz = sz;
+    digit_buffer q1, r1;
+    size_t q_sz = sz1 - sz2 + 1;
+    size_t r_sz = sz2;
     q1.ensure_capacity(q_sz);
     r1.ensure_capacity(r_sz);
-    mpn_div(m_digits, m_size,
-            digits, sz,
+    mpn_div(d1, sz1,
+            d2, sz2,
             q1.begin(), r1.begin());
     set(r_sz, r1.begin());
-    m_sign = m_sign && !is_zero();
-    return *this;
+    m_sign = sign1 && !is_zero();
 }
 
 mpz & mpz::operator+=(mpz const & o) {
-    return add(o.m_sign, o.m_size, o.m_digits);
+    set_add(m_sign, m_size, m_digits, o.m_sign, o.m_size, o.m_digits);
+    return *this;
 }
 
 mpz & mpz::operator+=(unsigned u) {
-    return add(false, 1, &u);
+    set_add(m_sign, m_size, m_digits, false, 1, &u);
+    return *this;
 }
 
 mpz & mpz::operator+=(int u) {
-    if (u < 0) {
-        unsigned u1 = -static_cast<unsigned>(u);
-        return add(true, 1, &u1);
-    } else {
-        unsigned u1 = u;
-        return add(false, 1, &u1);
-    }
+    unsigned u1 = u < 0 ? -static_cast<unsigned>(u) : static_cast<unsigned>(u);
+    set_add(m_sign, m_size, m_digits, u < 0, 1, &u1);
+    return *this;
 }
 
 mpz & mpz::operator-=(mpz const & o) {
-    return add(!o.m_sign, o.m_size, o.m_digits);
+    set_add(m_sign, m_size, m_digits, !o.m_sign, o.m_size, o.m_digits);
+    return *this;
 }
 
 mpz & mpz::operator-=(unsigned u) {
-    return add(true, 1, &u);
+    set_add(m_sign, m_size, m_digits, true, 1, &u);
+    return *this;
 }
 
 mpz & mpz::operator-=(int u) {
-    if (u < 0) {
-        unsigned u1 = -static_cast<unsigned>(u);
-        return add(false, 1, &u1);
-    } else {
-        unsigned u1 = u;
-        return add(true, 1, &u1);
-    }
+    unsigned u1 = u < 0 ? -static_cast<unsigned>(u) : static_cast<unsigned>(u);
+    set_add(m_sign, m_size, m_digits, u >= 0, 1, &u1);
+    return *this;
 }
 
 mpz & mpz::operator*=(mpz const & o) {
-    return mul(o.m_sign, o.m_size, o.m_digits);
+    set_mul(m_sign, m_size, m_digits, o.m_sign, o.m_size, o.m_digits);
+    return *this;
 }
 
 mpz & mpz::operator*=(unsigned u) {
-    return mul(false, 1, &u);
+    set_mul(m_sign, m_size, m_digits, false, 1, &u);
+    return *this;
 }
 
 mpz & mpz::operator*=(int u) {
-    if (u < 0) {
-        unsigned u1 = -static_cast<unsigned>(u);
-        return mul(true, 1, &u1);
-    } else {
-        unsigned u1 = u;
-        return mul(false, 1, &u1);
-    }
+    unsigned u1 = u < 0 ? -static_cast<unsigned>(u) : static_cast<unsigned>(u);
+    set_mul(m_sign, m_size, m_digits, u < 0, 1, &u1);
+    return *this;
 }
 
 mpz & mpz::operator/=(mpz const & o) {
-    return div(o.m_sign, o.m_size, o.m_digits);
+    set_div(m_sign, m_size, m_digits, o.m_sign, o.m_size, o.m_digits);
+    return *this;
 }
 
 mpz & mpz::operator/=(unsigned u) {
-    return div(false, 1, &u);
+    set_div(m_sign, m_size, m_digits, false, 1, &u);
+    return *this;
 }
 
 mpz & mpz::operator%=(mpz const & o) {
-    return rem(o.m_size, o.m_digits);
+    set_rem(m_sign, m_size, m_digits, o.m_size, o.m_digits);
+    return *this;
+}
+
+mpz operator+(mpz const & a, mpz const & b) {
+    mpz r;
+    r.set_add(a.m_sign, a.m_size, a.m_digits, b.m_sign, b.m_size, b.m_digits);
+    return r;
+}
+
+mpz operator+(mpz const & a, unsigned b) {
+    mpz r;
+    r.set_add(a.m_sign, a.m_size, a.m_digits, false, 1, &b);
+    return r;
+}
+
+mpz operator+(mpz const & a, int b) {
+    unsigned b1 = b < 0 ? -static_cast<unsigned>(b) : static_cast<unsigned>(b);
+    mpz r;
+    r.set_add(a.m_sign, a.m_size, a.m_digits, b < 0, 1, &b1);
+    return r;
+}
+
+mpz operator-(mpz const & a, mpz const & b) {
+    mpz r;
+    r.set_add(a.m_sign, a.m_size, a.m_digits, !b.m_sign, b.m_size, b.m_digits);
+    return r;
+}
+
+mpz operator-(mpz const & a, unsigned b) {
+    mpz r;
+    r.set_add(a.m_sign, a.m_size, a.m_digits, true, 1, &b);
+    return r;
+}
+
+mpz operator-(mpz const & a, int b) {
+    unsigned b1 = b < 0 ? -static_cast<unsigned>(b) : static_cast<unsigned>(b);
+    mpz r;
+    r.set_add(a.m_sign, a.m_size, a.m_digits, b >= 0, 1, &b1);
+    return r;
+}
+
+mpz operator*(mpz const & a, mpz const & b) {
+    mpz r;
+    r.set_mul(a.m_sign, a.m_size, a.m_digits, b.m_sign, b.m_size, b.m_digits);
+    return r;
+}
+
+mpz operator*(mpz const & a, unsigned b) {
+    mpz r;
+    r.set_mul(a.m_sign, a.m_size, a.m_digits, false, 1, &b);
+    return r;
+}
+
+mpz operator*(mpz const & a, int b) {
+    unsigned b1 = b < 0 ? -static_cast<unsigned>(b) : static_cast<unsigned>(b);
+    mpz r;
+    r.set_mul(a.m_sign, a.m_size, a.m_digits, b < 0, 1, &b1);
+    return r;
+}
+
+mpz operator/(mpz const & a, mpz const & b) {
+    mpz r;
+    r.set_div(a.m_sign, a.m_size, a.m_digits, b.m_sign, b.m_size, b.m_digits);
+    return r;
+}
+
+mpz operator/(mpz const & a, unsigned b) {
+    mpz r;
+    r.set_div(a.m_sign, a.m_size, a.m_digits, false, 1, &b);
+    return r;
+}
+
+mpz operator%(mpz const & a, mpz const & b) {
+    mpz r;
+    r.set_rem(a.m_sign, a.m_size, a.m_digits, b.m_size, b.m_digits);
+    return r;
 }
 
 mpz mpz::divexact(mpz const & n, mpz const & d) {
@@ -813,8 +924,7 @@ mpz mpz::ediv(mpz const & n, mpz const & d) {
 }
 
 mpz mpz::emod(mpz const & n, mpz const & d) {
-    mpz r(n);
-    r.rem(d.m_size, d.m_digits);
+    mpz r = n % d;
     if (r.is_neg()) {
         if (d.is_pos()) {
             r += d;
@@ -890,44 +1000,32 @@ size_t mpz::size_in_bytes() const {
     return m_size * sizeof(mpn_digit);
 }
 
-mpz & mpz::operator&=(mpz const & o) {
+// Bitwise operations are only used on non-negative values (`Nat`); as before,
+// the sign of the result is the sign of the first operand.
+template<typename F> void mpz::set_bitwise(mpz const & a, mpz const & b, F f) {
     digit_buffer r;
-    size_t sz = std::max(m_size, o.m_size);
+    size_t sz = std::max(a.m_size, b.m_size);
     r.ensure_capacity(sz);
     for (size_t i = 0; i < sz; i++) {
-        mpn_digit u_i = (i < m_size)   ? m_digits[i]   : 0;
-        mpn_digit v_i = (i < o.m_size) ? o.m_digits[i] : 0;
-        r.push_back(u_i & v_i);
+        mpn_digit u_i = (i < a.m_size) ? a.m_digits[i] : 0;
+        mpn_digit v_i = (i < b.m_size) ? b.m_digits[i] : 0;
+        r.push_back(f(u_i, v_i));
     }
+    m_sign = a.m_sign;
     set(sz, r.begin());
-    return *this;
 }
 
-mpz & mpz::operator|=(mpz const & o) {
-    digit_buffer r;
-    size_t sz = std::max(m_size, o.m_size);
-    r.ensure_capacity(sz);
-    for (size_t i = 0; i < sz; i++) {
-        mpn_digit u_i = (i < m_size)   ? m_digits[i]   : 0;
-        mpn_digit v_i = (i < o.m_size) ? o.m_digits[i] : 0;
-        r.push_back(u_i | v_i);
-    }
-    set(sz, r.begin());
-    return *this;
-}
+static mpn_digit digit_and(mpn_digit u, mpn_digit v) { return u & v; }
+static mpn_digit digit_or(mpn_digit u, mpn_digit v) { return u | v; }
+static mpn_digit digit_xor(mpn_digit u, mpn_digit v) { return u ^ v; }
 
-mpz & mpz::operator^=(mpz const & o) {
-    digit_buffer r;
-    size_t sz = std::max(m_size, o.m_size);
-    r.ensure_capacity(sz);
-    for (size_t i = 0; i < sz; i++) {
-        mpn_digit u_i = (i < m_size)   ? m_digits[i]   : 0;
-        mpn_digit v_i = (i < o.m_size) ? o.m_digits[i] : 0;
-        r.push_back(u_i ^ v_i);
-    }
-    set(sz, r.begin());
-    return *this;
-}
+mpz & mpz::operator&=(mpz const & o) { set_bitwise(*this, o, digit_and); return *this; }
+mpz & mpz::operator|=(mpz const & o) { set_bitwise(*this, o, digit_or); return *this; }
+mpz & mpz::operator^=(mpz const & o) { set_bitwise(*this, o, digit_xor); return *this; }
+
+mpz operator&(mpz const & a, mpz const & b) { mpz r; r.set_bitwise(a, b, digit_and); return r; }
+mpz operator|(mpz const & a, mpz const & b) { mpz r; r.set_bitwise(a, b, digit_or); return r; }
+mpz operator^(mpz const & a, mpz const & b) { mpz r; r.set_bitwise(a, b, digit_xor); return r; }
 
 void mul2k(mpz & a, mpz const & b, unsigned k) {
     lean_assert(!b.m_sign);
